@@ -103,7 +103,7 @@ function sendData(type) {
 
     fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
         method: "POST",
-        mode: "no-cors",
+        mode: "cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ barcode: lastCode, operazione: type })
     });
@@ -116,4 +116,5 @@ startScanner();
 
 </body>
 </html>
+
 
