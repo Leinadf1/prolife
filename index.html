@@ -27,65 +27,48 @@ const detector = ("BarcodeDetector" in window)
     ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
     : null;
 
-// 🔥 Calcola larghezza dell'immagine → usata per capire il FOV
-function measureFOV(deviceId) {
-    return new Promise(async resolve => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: deviceId } }
-            });
-
-            const track = stream.getVideoTracks()[0];
-            const settings = track.getSettings();
-
-            const width = settings.width ?? 0;
-
-            stream.getTracks().forEach(t => t.stop());
-            resolve(width);
-        } catch (e) {
-            resolve(0);
-        }
-    });
-}
-
-// 🔥 Selezione automatica: la camera con la maggiore risoluzione → camera normale
-async function findMainCamera() {
+// 🔥 Trova la vera camera posteriore 1x
+async function findBackCamera1x() {
+    // Sblocca permessi per vedere i nomi
     await navigator.mediaDevices.getUserMedia({ video: true });
 
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter(d => d.kind === "videoinput");
 
-    let bestCam = null;
-    let bestFOV = 0;
+    // Filtra le camere posteriori "normali"
+    const backNormal = cameras.find(cam => {
+        const label = cam.label.toLowerCase();
 
-    for (const cam of cameras) {
-        const fov = await measureFOV(cam.deviceId);
-        if (fov > bestFOV) {
-            bestFOV = fov;
-            bestCam = cam;
-        }
-    }
+        return (
+            label.includes("back") &&           // deve essere posteriore
+            !label.includes("ultra") &&         // NON grandangolo
+            !label.includes("wide") &&          // elimina wide-angle
+            !label.includes("tele") &&          // elimina teleobiettivo
+            !label.includes("zoom") &&          // elimina zoom
+            !label.includes("front")            // NON frontale
+        );
+    });
 
-    return bestCam?.deviceId ?? null;
+    // Se non la trova → fallback: qualsiasi camera posteriore
+    if (backNormal) return backNormal.deviceId;
+
+    const anyBack = cameras.find(cam => cam.label.toLowerCase().includes("back"));
+    return anyBack?.deviceId ?? null;
 }
 
-// 📸 Avvio scanner con la fotocamera identificata
+
+// 📸 Avvia scanner con la camera posteriore 1x
 async function startScanner() {
     if (currentStream) {
         currentStream.getTracks().forEach(t => t.stop());
-        currentStream = null;
     }
 
-    const deviceId = await findMainCamera();
-    console.log("MIGLIOR FOTOCAMERA TROVATA:", deviceId);
+    const deviceId = await findBackCamera1x();
+    console.log("Fotocamera 1x selezionata:", deviceId);
 
-    let constraints = null;
-
-    if (deviceId) {
-        constraints = { video: { deviceId: { exact: deviceId } } };
-    } else {
-        constraints = { video: { facingMode: "environment" } };
-    }
+    const constraints = deviceId
+        ? { video: { deviceId: { exact: deviceId } } }
+        : { video: { facingMode: "environment" } };
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     currentStream = stream;
@@ -94,7 +77,7 @@ async function startScanner() {
     scanLoop();
 }
 
-// 🔍 Loop di scansione barcode
+// 🔍 Scansione continua
 async function scanLoop() {
     if (detector) {
         try {
@@ -111,7 +94,7 @@ async function scanLoop() {
     requestAnimationFrame(scanLoop);
 }
 
-// 🔼 Invio a Google Apps Script
+// 🔼 Invio dati a Google Apps Script
 function sendData(type) {
     if (!lastCode) {
         alert("Scansiona prima un codice!");
