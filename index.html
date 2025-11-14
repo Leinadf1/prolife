@@ -100,22 +100,18 @@ function sendData(type) {
         alert("Scansiona prima un codice!");
         return;
     }
-    
-    fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
+
+    fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDpmG5an3JtEDEo8P-9q3BicmoQkyatWLx5JWglV3VWGmFF-c7qZ3i2wyA/exec", {
         method: "POST",
+        mode: "no-cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             barcode: lastCode,
             operazione: type
         })
-    })
-    .then(() => {
-        alert("Operazione inviata!");
-    })
-    .catch(err => {
-        alert("Errore: " + err);
     });
 }
+
 
 
 startScanner();
@@ -123,6 +119,7 @@ startScanner();
 
 </body>
 </html>
+
 
 
 
