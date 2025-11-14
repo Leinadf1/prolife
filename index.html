@@ -32,36 +32,67 @@ const detector = ("BarcodeDetector" in window)
 // 🔥 NUOVA FUNZIONE startScanner() con scelta fotocamera corretta
 // -------------------------------------------------------------
 async function startScanner() {
-
-    // 1️⃣ Permesso iniziale (necessario per leggere i deviceId)
+    // 1️⃣ Permesso per sbloccare deviceId
     await navigator.mediaDevices.getUserMedia({ video: true });
 
-    // 2️⃣ Lista delle videocamere disponibili
+    // 2️⃣ Ottieni tutte le camere
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter(d => d.kind === "videoinput");
 
-    // 3️⃣ Cerchiamo la camera posteriore NON grandangolare
-    let mainCam = cameras.find(c =>
-        c.label.toLowerCase().includes("back") &&
-        !c.label.toLowerCase().includes("wide") &&
-        !c.label.toLowerCase().includes("ultra")
+    // 3️⃣ Cerco TUTTE le camere posteriori
+    const backCameras = cameras.filter(c =>
+        c.label.toLowerCase().includes("back") ||
+        c.label.toLowerCase().includes("rear")
     );
 
-    // Se non trovata → prima posteriore
-    if (!mainCam) {
-        mainCam = cameras.find(c => c.label.toLowerCase().includes("back"));
+    let bestCamera = null;
+    let bestDistance = Infinity;
+
+    // 4️⃣ Testiamo ogni camera per capire la focale reale
+    for (const cam of backCameras) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: cam.deviceId }
+            });
+
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings();
+
+            // Ci interessa "focalLengthX" e "focalLength"
+            const focal = settings.focalLengthX || settings.focalLength || 1.0;
+
+            // Chi è più vicino a 1.0 (= camera principale 1x) vince
+            let distance = Math.abs(focal - 1.0);
+
+            if (distance < bestDistance) {
+                bestCamera = cam;
+                bestDistance = distance;
+            }
+
+            // Chiudiamo ogni stream di test
+            track.stop();
+
+        } catch (err) {
+            console.warn("Errore analizzando cam", cam.label, err);
+        }
     }
 
-    // 4️⃣ Avvia la fotocamera selezionata
-    const stream = await navigator.mediaDevices.getUserMedia({
+    // 5️⃣ Se non abbiamo trovato niente, ripieghiamo sulla prima posteriore
+    if (!bestCamera) bestCamera = backCameras[0] || cameras[0];
+
+    console.log("Fotocamera selezionata:", bestCamera.label);
+
+    // 6️⃣ Avvia lo stream DEFINITIVO con la camera giusta
+    const finalStream = await navigator.mediaDevices.getUserMedia({
         video: {
-            deviceId: mainCam?.deviceId ?? undefined,
-            facingMode: "environment"
+            deviceId: bestCamera.deviceId,
+            focusMode: "continuous"
         }
     });
 
-    video.srcObject = stream;
+    video.srcObject = finalStream;
 
+    // Avvia la scansione
     scanLoop();
 }
 
@@ -112,3 +143,4 @@ function sendData(type) {
 
 </body>
 </html>
+
