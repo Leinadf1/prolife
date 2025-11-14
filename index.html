@@ -20,97 +20,74 @@
 
 <script>
 let lastCode = "";
-let currentStream = null;
 const video = document.getElementById("video");
 
-const detector = ("BarcodeDetector" in window)
+let detector = ("BarcodeDetector" in window)
     ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
     : null;
 
-// 🔥 Trova la vera camera posteriore 1x
-async function findBackCamera1x() {
-    // Sblocca permessi per vedere i nomi
-    await navigator.mediaDevices.getUserMedia({ video: true });
-
+async function getBackCameraDeviceId() {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const cameras = devices.filter(d => d.kind === "videoinput");
+    console.log(devices);
 
-    // Filtra le camere posteriori "normali"
-    const backNormal = cameras.find(cam => {
-        const label = cam.label.toLowerCase();
+    // 1️⃣ FILTRA SOLO LE FOTOCAMERE POSTERIORI
+    const backCams = devices.filter(d =>
+        d.kind === "videoinput" &&
+        d.label.toLowerCase().includes("back")
+    );
 
-        return (
-            label.includes("back") &&           // deve essere posteriore
-            !label.includes("ultra") &&         // NON grandangolo
-            !label.includes("wide") &&          // elimina wide-angle
-            !label.includes("tele") &&          // elimina teleobiettivo
-            !label.includes("zoom") &&          // elimina zoom
-            !label.includes("front")            // NON frontale
-        );
-    });
+    if (backCams.length === 1) return backCams[0].deviceId;
 
-    // Se non la trova → fallback: qualsiasi camera posteriore
-    if (backNormal) return backNormal.deviceId;
+    // 2️⃣ CERCA UNA CAMERA NON ULTRAWIDE
+    const normalCam = backCams.find(d =>
+        !d.label.toLowerCase().includes("wide") &&
+        !d.label.toLowerCase().includes("ultra") &&
+        !d.label.toLowerCase().includes("0.5")
+    );
+    if (normalCam) return normalCam.deviceId;
 
-    const anyBack = cameras.find(cam => cam.label.toLowerCase().includes("back"));
-    return anyBack?.deviceId ?? null;
+    // 3️⃣ fallback → la prima back camera disponibile
+    if (backCams.length > 0) return backCams[0].deviceId;
+
+    return null;
 }
 
-
-// 📸 Avvia scanner con la camera posteriore 1x
 async function startScanner() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { exact: "environment" },
-                width: { min: 1280, ideal: 1920, max: 4096 },
-                height: { min: 720, ideal: 1080, max: 2160 },
-                advanced: [
-                    { width: 1920, height: 1080 },
-                    { width: 2560, height: 1440 },
-                    { width: 3840, height: 2160 }
-                ]
-            }
-        });
+    // ❗ DEVI AVERE GIÀ DATO LA PERMISSION DELLA CAMERA ALMENO UNA VOLTA
+    await navigator.mediaDevices.getUserMedia({ video: true });
 
-        video.srcObject = stream;
+    const deviceId = await getBackCameraDeviceId();
+    console.log("Camera selezionata:", deviceId);
 
-    } catch (err) {
-        console.log("Fallback attivato:", err);
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+            deviceId: deviceId ? { exact: deviceId } : undefined
+        }
+    });
 
-        // fallback se exact: environment fallisce
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "environment",
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-            }
-        });
-
-        video.srcObject = stream;
-    }
+    video.srcObject = stream;
 
     scanLoop();
 }
 
-// 🔍 Scansione continua
 async function scanLoop() {
     if (detector) {
         try {
-            const results = await detector.detect(video);
-            if (results.length > 0) {
-                const code = results[0].rawValue;
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0) {
+                const code = barcodes[0].rawValue;
                 if (code !== lastCode) {
                     lastCode = code;
                     document.getElementById("code").innerText = "CODICE: " + code;
                 }
             }
-        } catch (e) {}
+        } catch {}
     }
+
     requestAnimationFrame(scanLoop);
 }
 
-// 🔼 Invio dati a Google Apps Script
+// 🔼 INVIO A GOOGLE SHEETS
 function sendData(type) {
     if (!lastCode) {
         alert("Scansiona prima un codice!");
@@ -121,7 +98,10 @@ function sendData(type) {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ barcode: lastCode, operazione: type })
+        body: JSON.stringify({
+            barcode: lastCode,
+            operazione: type
+        })
     });
 
     alert("Operazione inviata!");
@@ -132,4 +112,5 @@ startScanner();
 
 </body>
 </html>
+
 
