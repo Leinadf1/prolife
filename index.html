@@ -79,7 +79,7 @@ function sendData(type) {
     data.append("barcode", lastCode);
     data.append("operazione", type);
 
-    fetch("URL_DEL_TUO_SCRIPT/exec", {
+    fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
         method: "POST",
         body: data
     });
@@ -92,3 +92,4 @@ startScanner();
 
 </body>
 </html>
+
