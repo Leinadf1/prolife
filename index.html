@@ -59,20 +59,36 @@ async function findBackCamera1x() {
 
 // 📸 Avvia scanner con la camera posteriore 1x
 async function startScanner() {
-    if (currentStream) {
-        currentStream.getTracks().forEach(t => t.stop());
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { exact: "environment" },
+                width: { min: 1280, ideal: 1920, max: 4096 },
+                height: { min: 720, ideal: 1080, max: 2160 },
+                advanced: [
+                    { width: 1920, height: 1080 },
+                    { width: 2560, height: 1440 },
+                    { width: 3840, height: 2160 }
+                ]
+            }
+        });
+
+        video.srcObject = stream;
+
+    } catch (err) {
+        console.log("Fallback attivato:", err);
+
+        // fallback se exact: environment fallisce
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "environment",
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }
+        });
+
+        video.srcObject = stream;
     }
-
-    const deviceId = await findBackCamera1x();
-    console.log("Fotocamera 1x selezionata:", deviceId);
-
-    const constraints = deviceId
-        ? { video: { deviceId: { exact: deviceId } } }
-        : { video: { facingMode: "environment" } };
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    currentStream = stream;
-    video.srcObject = stream;
 
     scanLoop();
 }
@@ -116,3 +132,4 @@ startScanner();
 
 </body>
 </html>
+
