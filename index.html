@@ -100,22 +100,30 @@ function sendData(type) {
         alert("Scansiona prima un codice!");
         return;
     }
-
-    fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH", {
+    
+    fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
         method: "POST",
-        mode: "no cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ barcode: lastCode, operazione: type })
+        body: JSON.stringify({
+            barcode: lastCode,
+            operazione: type
+        })
+    })
+    .then(() => {
+        alert("Operazione inviata!");
+    })
+    .catch(err => {
+        alert("Errore: " + err);
     });
-
-    alert("Operazione inviata!");
 }
+
 
 startScanner();
 </script>
 
 </body>
 </html>
+
 
 
 
