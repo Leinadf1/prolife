@@ -1,85 +1,65 @@
+<html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <title>Scanner Magazzino</title>
 <style>
     body { font-family: Arial; padding: 20px; text-align: center; }
-    #preview { width: 90%; border: 2px solid black; margin-bottom: 20px; }
-    button { padding: 15px; font-size: 20px; margin: 10px; width: 40%; }
+    video { width: 100%; max-width: 600px; border: 2px solid black; }
+    button { padding: 15px; font-size: 22px; margin: 10px; width: 45%; }
 </style>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 </head>
 <body>
 
 <h2>📦 Scanner Magazzino</h2>
 
-<!-- ANTEPRIMA VIDEO CORRETTA -->
-<video id="preview" autoplay playsinline></video>
-
+<video id="video" autoplay playsinline></video>
 <h3 id="code">CODICE: —</h3>
 
 <button onclick="sendData('carico')" style="background:#4CAF50;color:white;">CARICO</button>
 <button onclick="sendData('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
 
 <script>
+let lastCode = "";
+const video = document.getElementById("video");
 
-// 🔥 START FOTOCAMERA (compatibile con tutti i telefoni)
-async function startCamera() {
-    const video = document.getElementById("preview");
+// 🔥 USA BarcodeDetector NATIVO
+const detector = ("BarcodeDetector" in window)
+    ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
+    : null;
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" },   // camera posteriore
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+async function startScanner() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+    });
+
+    video.srcObject = stream;
+
+    scanLoop();
+}
+
+async function scanLoop() {
+    if (detector) {
+        try {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0) {
+                const code = barcodes[0].rawValue;
+                if (code !== lastCode) {
+                    lastCode = code;
+                    document.getElementById("code").innerText = "CODICE: " + code;
+                }
             }
-        });
-
-        video.srcObject = stream;
-
-        startQuagga();
-
-    } catch (err) {
-        alert("Errore accesso fotocamera: " + err);
-        console.error(err);
+        } catch (e) {}
     }
+
+    requestAnimationFrame(scanLoop);
 }
 
-// 🔥 QUAGGA INIT (usa il video già avviato)
-function startQuagga() {
-    Quagga.init({
-        inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#preview'),
-        },
-        decoder: {
-            readers: ["ean_reader", "ean_13_reader", "code_128_reader"]
-        }
-    }, function(err) {
-        if (err) { console.error(err); return; }
-        Quagga.start();
-    });
+startScanner();
 
-    let lastCode = "";
-
-    Quagga.onDetected(function(result) {
-        const code = result.codeResult.code;
-
-        if (code !== lastCode) {
-            lastCode = code;
-            window.lastDetected = code;  // globale
-            document.getElementById("code").innerText = "CODICE: " + code;
-        }
-    });
-}
-
-// ✔ CARICA/SCARICA SU GOOGLE SHEETS
+// 🔼 INVIO ALFOGLIO GOOGLE
 function sendData(type) {
-
-    if (!window.lastDetected) {
+    if (!lastCode) {
         alert("Scansiona prima un codice!");
         return;
     }
@@ -89,17 +69,13 @@ function sendData(type) {
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            barcode: window.lastDetected,
+            barcode: lastCode,
             operazione: type
         })
     });
 
     alert("Operazione inviata!");
 }
-
-// Avvia fotocamera al caricamento
-startCamera();
-
 </script>
 
 </body>
