@@ -29,8 +29,30 @@ const detector = ("BarcodeDetector" in window)
     : null;
 
 async function startScanner() {
+    // 1️⃣ Permesso iniziale
+    await navigator.mediaDevices.getUserMedia({ video: true });
+
+    // 2️⃣ Lista dispositivi video
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === "videoinput");
+
+    // 3️⃣ Trova la fotocamera posteriore NON grandangolare
+    let mainCam = cameras.find(c =>
+        c.label.toLowerCase().includes("back") &&
+        !c.label.toLowerCase().includes("wide") &&
+        !c.label.toLowerCase().includes("ultra")
+    );
+
+    // Se non trovata → usa la prima camera posteriore
+    if (!mainCam) {
+        mainCam = cameras.find(c => c.label.toLowerCase().includes("back"));
+    }
+
+    // 4️⃣ Avvia lo stream con deviceId specifico
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
+        video: {
+            deviceId: mainCam?.deviceId ?? undefined
+        }
     });
 
     video.srcObject = stream;
@@ -80,3 +102,4 @@ function sendData(type) {
 
 </body>
 </html>
+
