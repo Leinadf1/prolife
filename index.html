@@ -6,6 +6,7 @@
     body { font-family: Arial; padding: 20px; text-align: center; }
     video { width: 100%; max-width: 600px; border: 2px solid black; }
     button { padding: 15px; font-size: 22px; margin: 10px; width: 45%; }
+    #fileInput { display: none; }
 </style>
 </head>
 <body>
@@ -18,44 +19,58 @@
 <button onclick="sendData('carico')" style="background:#4CAF50;color:white;">CARICO</button>
 <button onclick="sendData('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
 
+<br><br>
+
+<!-- FALLBACK CAMERA PER SAMSUNG -->
+<input type="file" id="fileInput" accept="image/*" capture="environment">
+
 <script>
 let lastCode = "";
 let currentStream = null;
 const video = document.getElementById("video");
 
-const detector = ("BarcodeDetector" in window)
-    ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
-    : null;
+let detector = null;
 
-// --- Selezione fotocamera ---
-async function findBackCamera1x() {
-    await navigator.mediaDevices.getUserMedia({ video: true });
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const cams = devices.filter(d => d.kind === "videoinput");
-    const normal = cams.find(c => {
-        const l = c.label.toLowerCase();
-        return l.includes("back") && !l.includes("wide") && !l.includes("ultra") &&
-               !l.includes("tele") && !l.includes("zoom") && !l.includes("front");
-    });
-    return normal?.deviceId ?? null;
+if ("BarcodeDetector" in window) {
+    detector = new BarcodeDetector({ formats: ["ean_13", "code_128"] });
 }
 
+
+// -----------------------------
+// FORZA FOTOCAMERA POSTERIORE
+// -----------------------------
 async function startScanner() {
-    if (currentStream)
-        currentStream.getTracks().forEach(t => t.stop());
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === "videoinput");
 
-    const deviceId = await findBackCamera1x();
-    const constraints = deviceId
-        ? { video: { deviceId: { exact: deviceId } } }
-        : { video: { facingMode: "environment" } };
+        let backCam = cams.find(c => c.label.toLowerCase().includes("back"));
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    currentStream = stream;
-    video.srcObject = stream;
-    scanLoop();
+        const constraints = backCam ? {
+            video: { deviceId: backCam.deviceId }
+        } : {
+            video: { facingMode: "environment" }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        video.srcObject = stream;
+
+        scanLoop();
+    } catch (err) {
+        console.error("Errore fotocamera:", err);
+
+        alert("⚠ La fotocamera non può essere attivata.\nUsa la modalità foto.");
+        document.getElementById("fileInput").style.display = "block";
+    }
 }
 
+
+// -----------------------------
+// SCANSIONE CONTINUA
+// -----------------------------
 async function scanLoop() {
+
     if (detector) {
         try {
             const results = await detector.detect(video);
@@ -68,12 +83,42 @@ async function scanLoop() {
             }
         } catch {}
     }
+
     requestAnimationFrame(scanLoop);
 }
 
-// --- INVIO DATI A GOOGLE SHEETS (CORRETTO) ---
+
+// -----------------------------
+// FALLBACK SCATTO FOTO
+// -----------------------------
+document.getElementById("fileInput").addEventListener("change", async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const img = await createImageBitmap(file);
+
+    try {
+        const results = await detector.detect(img);
+        if (results.length > 0) {
+            lastCode = results[0].rawValue;
+            document.getElementById("code").innerText = "CODICE: " + lastCode;
+        } else {
+            alert("Codice non rilevato. Riprova.");
+        }
+    } catch (err) {
+        alert("Errore lettura immagine");
+    }
+});
+
+
+// -----------------------------
+// INVIO A GOOGLE SHEETS
+// -----------------------------
 function sendData(type) {
-    if (!lastCode) return alert("Scansiona prima un codice!");
+    if (!lastCode) {
+        alert("Scansiona prima un codice!");
+        return;
+    }
 
     let data = new FormData();
     data.append("barcode", lastCode);
@@ -87,9 +132,13 @@ function sendData(type) {
     alert("Operazione inviata!");
 }
 
+
+// Avvia fotocamera
 startScanner();
 </script>
 
 </body>
 </html>
+
+
 
