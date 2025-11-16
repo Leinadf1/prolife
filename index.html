@@ -6,7 +6,6 @@
     body { font-family: Arial; padding: 20px; text-align: center; }
     video { width: 100%; max-width: 600px; border: 2px solid black; }
     button { padding: 15px; font-size: 22px; margin: 10px; width: 45%; }
-    #fileInput { display: none; }
 </style>
 </head>
 <body>
@@ -16,55 +15,66 @@
 <video id="video" autoplay playsinline></video>
 <h3 id="code">CODICE: —</h3>
 
-<button onclick="askQuantity('carico')" style="background:#4CAF50;color:white;">CARICO</button>
-<button onclick="askQuantity('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
-
-<br><br>
-<input type="file" id="fileInput" accept="image/*" capture="environment">
-
-<audio id="beep">
-    <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA..." type="audio/mp3">
-</audio>
+<button onclick="sendData('carico')" style="background:#4CAF50;color:white;">CARICO</button>
+<button onclick="sendData('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
 
 <script>
 let lastCode = "";
 let currentStream = null;
 const video = document.getElementById("video");
-const beep = document.getElementById("beep");
 
-let detector = ("BarcodeDetector" in window)
+// --- BEEP COMPATIBILE 100% ANDROID / IOS ---
+function playBeep() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = "sine";
+    osc.frequency.value = 1500; // tono
+    gain.gain.value = 0.15;     // volume
+
+    osc.start();
+    setTimeout(() => {
+        osc.stop();
+        ctx.close();
+    }, 120);
+}
+
+const detector = ("BarcodeDetector" in window)
     ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
     : null;
 
-
-// -----------------------------
-// AVVIO FOTOCAMERA
-// -----------------------------
-async function startScanner() {
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cams = devices.filter(d => d.kind === "videoinput");
-        let backCam = cams.find(c => c.label.toLowerCase().includes("back"));
-
-        const constraints = backCam
-            ? { video: { deviceId: backCam.deviceId } }
-            : { video: { facingMode: "environment" } };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        currentStream = stream;
-        video.srcObject = stream;
-
-        scanLoop();
-    } catch (err) {
-        alert("⚠ Fotocamera non disponibile, attivo la modalità foto.");
-        document.getElementById("fileInput").style.display = "block";
-    }
+// --- Selezione fotocamera ---
+async function findBackCamera1x() {
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === "videoinput");
+    const normal = cams.find(c => {
+        const l = c.label.toLowerCase();
+        return l.includes("back") && !l.includes("wide") && !l.includes("ultra") &&
+               !l.includes("tele") && !l.includes("zoom") && !l.includes("front");
+    });
+    return normal?.deviceId ?? null;
 }
 
+async function startScanner() {
+    if (currentStream)
+        currentStream.getTracks().forEach(t => t.stop());
 
-// -----------------------------
-// SCANSIONE CONTINUA
-// -----------------------------
+    const deviceId = await findBackCamera1x();
+    const constraints = deviceId
+        ? { video: { deviceId: { exact: deviceId } } }
+        : { video: { facingMode: "environment" } };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    currentStream = stream;
+    video.srcObject = stream;
+    scanLoop();
+}
+
 async function scanLoop() {
     if (detector) {
         try {
@@ -76,44 +86,21 @@ async function scanLoop() {
                     document.getElementById("code").innerText = "CODICE: " + code;
 
                     // 🔔 BEEP ALLA LETTURA
-                    beep.play();
+                    playBeep();
                 }
             }
         } catch {}
     }
-
     requestAnimationFrame(scanLoop);
 }
 
-
-// -----------------------------
-// CHIEDI QUANTITÀ
-// -----------------------------
-function askQuantity(type) {
+// --- INVIO DATI A GOOGLE SHEETS ---
+function sendData(type) {
     if (!lastCode) return alert("Scansiona prima un codice!");
 
-    let qty = prompt("Quanti pezzi vuoi " + (type === "carico" ? "aggiungere" : "scaricare") + "?");
-
-    if (!qty) return;
-    qty = parseInt(qty);
-
-    if (isNaN(qty) || qty <= 0) {
-        alert("Quantità non valida");
-        return;
-    }
-
-    sendData(type, qty);
-}
-
-
-// -----------------------------
-// INVIO AL SERVER
-// -----------------------------
-function sendData(type, qty) {
     let data = new FormData();
     data.append("barcode", lastCode);
     data.append("operazione", type);
-    data.append("quantita", qty);
 
     fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
         method: "POST",
@@ -128,6 +115,8 @@ startScanner();
 
 </body>
 </html>
+
+
 
 
 
