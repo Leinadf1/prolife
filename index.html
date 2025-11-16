@@ -16,41 +16,39 @@
 <video id="video" autoplay playsinline></video>
 <h3 id="code">CODICE: —</h3>
 
-<button onclick="sendData('carico')" style="background:#4CAF50;color:white;">CARICO</button>
-<button onclick="sendData('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
+<button onclick="askQuantity('carico')" style="background:#4CAF50;color:white;">CARICO</button>
+<button onclick="askQuantity('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
 
 <br><br>
-
-<!-- FALLBACK CAMERA PER SAMSUNG -->
 <input type="file" id="fileInput" accept="image/*" capture="environment">
+
+<audio id="beep">
+    <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA..." type="audio/mp3">
+</audio>
 
 <script>
 let lastCode = "";
 let currentStream = null;
 const video = document.getElementById("video");
+const beep = document.getElementById("beep");
 
-let detector = null;
-
-if ("BarcodeDetector" in window) {
-    detector = new BarcodeDetector({ formats: ["ean_13", "code_128"] });
-}
+let detector = ("BarcodeDetector" in window)
+    ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
+    : null;
 
 
 // -----------------------------
-// FORZA FOTOCAMERA POSTERIORE
+// AVVIO FOTOCAMERA
 // -----------------------------
 async function startScanner() {
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cams = devices.filter(d => d.kind === "videoinput");
-
         let backCam = cams.find(c => c.label.toLowerCase().includes("back"));
 
-        const constraints = backCam ? {
-            video: { deviceId: backCam.deviceId }
-        } : {
-            video: { facingMode: "environment" }
-        };
+        const constraints = backCam
+            ? { video: { deviceId: backCam.deviceId } }
+            : { video: { facingMode: "environment" } };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         currentStream = stream;
@@ -58,9 +56,7 @@ async function startScanner() {
 
         scanLoop();
     } catch (err) {
-        console.error("Errore fotocamera:", err);
-
-        alert("⚠ La fotocamera non può essere attivata.\nUsa la modalità foto.");
+        alert("⚠ Fotocamera non disponibile, attivo la modalità foto.");
         document.getElementById("fileInput").style.display = "block";
     }
 }
@@ -70,7 +66,6 @@ async function startScanner() {
 // SCANSIONE CONTINUA
 // -----------------------------
 async function scanLoop() {
-
     if (detector) {
         try {
             const results = await detector.detect(video);
@@ -79,6 +74,9 @@ async function scanLoop() {
                 if (code !== lastCode) {
                     lastCode = code;
                     document.getElementById("code").innerText = "CODICE: " + code;
+
+                    // 🔔 BEEP ALLA LETTURA
+                    beep.play();
                 }
             }
         } catch {}
@@ -89,40 +87,33 @@ async function scanLoop() {
 
 
 // -----------------------------
-// FALLBACK SCATTO FOTO
+// CHIEDI QUANTITÀ
 // -----------------------------
-document.getElementById("fileInput").addEventListener("change", async function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+function askQuantity(type) {
+    if (!lastCode) return alert("Scansiona prima un codice!");
 
-    const img = await createImageBitmap(file);
+    let qty = prompt("Quanti pezzi vuoi " + (type === "carico" ? "aggiungere" : "scaricare") + "?");
 
-    try {
-        const results = await detector.detect(img);
-        if (results.length > 0) {
-            lastCode = results[0].rawValue;
-            document.getElementById("code").innerText = "CODICE: " + lastCode;
-        } else {
-            alert("Codice non rilevato. Riprova.");
-        }
-    } catch (err) {
-        alert("Errore lettura immagine");
-    }
-});
+    if (!qty) return;
+    qty = parseInt(qty);
 
-
-// -----------------------------
-// INVIO A GOOGLE SHEETS
-// -----------------------------
-function sendData(type) {
-    if (!lastCode) {
-        alert("Scansiona prima un codice!");
+    if (isNaN(qty) || qty <= 0) {
+        alert("Quantità non valida");
         return;
     }
 
+    sendData(type, qty);
+}
+
+
+// -----------------------------
+// INVIO AL SERVER
+// -----------------------------
+function sendData(type, qty) {
     let data = new FormData();
     data.append("barcode", lastCode);
     data.append("operazione", type);
+    data.append("quantita", qty);
 
     fetch("https://script.google.com/macros/s/AKfycbww7kWmX-qDmG5an3JtEDEo8P-gqB3icmoQkyatWLx5JWgiV3VWGMFf-c7qZS1MNkoH/exec", {
         method: "POST",
@@ -132,8 +123,6 @@ function sendData(type) {
     alert("Operazione inviata!");
 }
 
-
-// Avvia fotocamera
 startScanner();
 </script>
 
