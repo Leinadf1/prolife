@@ -7,6 +7,14 @@
     video { width: 100%; max-width: 600px; border: 2px solid black; }
     button { padding: 15px; font-size: 22px; margin: 10px; width: 45%; }
     #fileInput { display: none; }
+    #code {
+    font-size: 36px;        /* grande */
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    color: #222;
+    word-break: break-all; /* evita che esca dallo schermo */
+}
 </style>
 </head>
 <body>
@@ -15,6 +23,13 @@
 
 <video id="video" autoplay playsinline></video>
 <h3 id="code">CODICE: —</h3>
+    {font-size: 36px;
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    color: #222;
+    word-break: break-all; /* evita che esca dallo schermo */
+}
 
 <button onclick="askQuantity('carico')" style="background:#4CAF50;color:white;">CARICO</button>
 <button onclick="askQuantity('scarico')" style="background:#D32F2F;color:white;">SCARICO</button>
@@ -22,15 +37,10 @@
 <br><br>
 <input type="file" id="fileInput" accept="image/*" capture="environment">
 
-<audio id="beep">
-    <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA..." type="audio/mp3">
-</audio>
-
 <script>
 let lastCode = "";
 let currentStream = null;
 const video = document.getElementById("video");
-const beep = document.getElementById("beep");
 
 let detector = ("BarcodeDetector" in window)
     ? new BarcodeDetector({ formats: ["ean_13", "code_128"] })
@@ -128,6 +138,7 @@ startScanner();
 
 </body>
 </html>
+
 
 
 
